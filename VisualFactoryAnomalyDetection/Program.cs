@@ -44,9 +44,11 @@ namespace VisualFactoryAnomalyDetection
 
         private static async Task CapturePicturesProcessDiffAsync(ushort tolerance)
         {
-            var pictures = await _piCamService.CaptureJpgFromVideoPortCustomHandlerAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+            TimeSpan captureTime = TimeSpan.FromSeconds(5);
+
+            var pictures = await _piCamService.CaptureJpgFromVideoPortCustomHandlerAsync(captureTime).ConfigureAwait(false);
             Console.WriteLine();
-            Console.WriteLine($"Captured pictures: {pictures.Count:N0}");
+            Console.WriteLine($"Captured pictures: {pictures.Count:N0} ({pictures.Count / captureTime.TotalSeconds:N0} pics/s)");
 
             var imageDiff = new BitmapDiff(tolerance);
             Stream previous = null;
@@ -67,7 +69,7 @@ namespace VisualFactoryAnomalyDetection
                 using var diff = await imageDiff.GetDiffImageAsync(previous, current).ConfigureAwait(false);
                 var diffNumber = await imageDiff.GetDiffNumberFromImageAsync(diff).ConfigureAwait(false);
 
-                Console.WriteLine($"Diff between previous and current pic: {diffNumber:N0}");
+                Console.WriteLine($"Diff between previous and current pic: {diffNumber:N0} ({picture.Timestamp:o})");
                 sb.Append($"{picture.Timestamp},{diffNumber}");
 
                 previous = current;
