@@ -16,7 +16,6 @@ namespace VisualFactoryAnomalyDetection
     {
         public MMALCamera MMALCamera;
         private readonly string _picStoragePath = "/home/pi/images/";
-        private readonly string _picExtension = "jpg";
         private readonly string _viseoStoragePath = "/home/pi/video/";
         private readonly string _videoExtension = "mp4";
 
@@ -30,21 +29,24 @@ namespace VisualFactoryAnomalyDetection
             //MMALCameraConfig.StillResolution = new Resolution(1640, 1232); // 4 MP (Binning).
             //MMALCameraConfig.StillResolution = new Resolution(1640, 922); // (Binning).
             //MMALCameraConfig.StillResolution = new Resolution(1920, 1080); // 2 MP.
-            //MMALCameraConfig.StillResolution = new Resolution(1280, 720); // 720p (Binning).
-            MMALCameraConfig.StillResolution = new Resolution(640, 480); // 2 MP (Binning).
+            //MMALCameraConfig.StillResolution = Resolution.As720p; // 1280x720 (Binning).
+            MMALCameraConfig.StillResolution = Resolution.As03MPixel; // 640x480 (Binning).
             MMALCameraConfig.ISO = 100;
             //MMALCameraConfig.Rotation = 180;
 
             // --------------------------------------------------------------------------------
 
             // Video and rapid capture mode settings.
-            //MMALCameraConfig.VideoResolution = new Resolution(1920, 1080); // 2 MP.
+            //MMALCameraConfig.VideoResolution = Resolution.As1080p; // 1920x1080.
 
-            //MMALCameraConfig.VideoResolution = new Resolution(1280, 720); // 720p
-            //MMALCameraConfig.VideoFramerate = new MMAL_RATIONAL_T(60, 1); // 43 pics/s as file | 53 pics/s in memory.
+            // JPEG: 43 pics/s as file | 53 pics/s in memory.
+            //MMALCameraConfig.VideoResolution = Resolution.As720p; // 1280x720 (Binning).
+            //MMALCameraConfig.VideoFramerate = new MMAL_RATIONAL_T(60, 1);
 
-            MMALCameraConfig.VideoResolution = new Resolution(640, 480);
-            MMALCameraConfig.VideoFramerate = new MMAL_RATIONAL_T(90, 1); // 75 pics/s as file | 89 pics/s in memory.
+            // JPEG: 75 pics/s as file | 89 pics/s in memory.
+            // BMP: 3 pics/s in memory.
+            MMALCameraConfig.VideoResolution = Resolution.As03MPixel; // 640x480 (Binning).
+            MMALCameraConfig.VideoFramerate = new MMAL_RATIONAL_T(90, 1);
 
             //MMALCameraConfig.VideoProfile = MMALParametersVideo.MMAL_VIDEO_PROFILE_T.MMAL_VIDEO_PROFILE_;
         }
@@ -56,7 +58,7 @@ namespace VisualFactoryAnomalyDetection
         {
             List<PictureWithTimestamp> pictureList = null;
 
-            using (var imgCaptureHandler = new CustomOutputHandler(_picStoragePath, _picExtension))
+            using (var imgCaptureHandler = new CustomOutputHandler(_picStoragePath, "jpg"))
             using (var splitter = new MMALSplitterComponent())
             // Resolution controlled by MMALCameraConfig.VideoResolution.
             using (var imgEncoder = new MMALImageEncoder(continuousCapture: true))
@@ -64,10 +66,13 @@ namespace VisualFactoryAnomalyDetection
             {
                 MMALCamera.ConfigureCameraSettings();
 
-                var portConfig = new MMALPortConfig(MMALEncoding.JPEG, MMALEncoding.I420);
+                var encInputConfig = new MMALPortConfig(MMALEncoding.OPAQUE, MMALEncoding.I420);
+                var encOutputConfig = new MMALPortConfig(MMALEncoding.JPEG, MMALEncoding.I420);
 
                 // Create our component pipeline.
-                imgEncoder.ConfigureOutputPort(portConfig, imgCaptureHandler);
+                imgEncoder
+                        .ConfigureInputPort(encInputConfig, null)
+                        .ConfigureOutputPort(encOutputConfig, imgCaptureHandler);
 
                 MMALCamera.Camera.VideoPort.ConnectTo(splitter);
                 splitter.Outputs[0].ConnectTo(imgEncoder);
@@ -122,7 +127,7 @@ namespace VisualFactoryAnomalyDetection
         public async Task<string> CaptureJpgAndGetFileNameAsync()
         {
             string fileName = null;
-            using (var imgCaptureHandler = new ImageStreamCaptureHandler(_picStoragePath, _picExtension))
+            using (var imgCaptureHandler = new ImageStreamCaptureHandler(_picStoragePath, "jpg"))
             {
                 await MMALCamera.TakePicture(
                     imgCaptureHandler,
@@ -169,7 +174,7 @@ namespace VisualFactoryAnomalyDetection
         /// </summary>
         public async Task CaptureJpgFromVideoPortAsync(TimeSpan captureTime)
         {
-            using (var imgCaptureHandler = new ImageStreamCaptureHandler(_picStoragePath, _picExtension))
+            using (var imgCaptureHandler = new ImageStreamCaptureHandler(_picStoragePath, "jpg"))
             using (var splitter = new MMALSplitterComponent())
             // Resolution controlled by MMALCameraConfig.VideoResolution.
             using (var imgEncoder = new MMALImageEncoder(continuousCapture: true))
