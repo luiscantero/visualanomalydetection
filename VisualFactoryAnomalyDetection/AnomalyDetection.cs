@@ -29,7 +29,7 @@ namespace VisualFactoryAnomalyDetection
             var cpdRequest = new ChangePointDetectRequest
             {
                 Series = request.Series,
-                Granularity = Granularity.Daily,
+                Granularity = request.Granularity,
             };
 
             // Change point detection.
@@ -44,7 +44,7 @@ namespace VisualFactoryAnomalyDetection
                 .Where(e => e.Length == 2)
                 .Select(e => new Point(DateTime.Parse(e[0]), double.Parse(e[1]))).ToList();
 
-            return new Request(list, Granularity.Daily);
+            return new Request(list, Granularity.Secondly);
         }
 
         /// <summary>
@@ -81,7 +81,6 @@ namespace VisualFactoryAnomalyDetection
         /// </summary>
         private static async Task LastDetectSampleAsync(IAnomalyDetectorClient client, Request request)
         {
-
             Console.WriteLine("Detecting the anomaly status of the latest point in the series ...");
 
             LastDetectResponse result = await client.LastDetectAsync(request).ConfigureAwait(false);
