@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -8,10 +9,16 @@ namespace VisualFactoryAnomalyDetection
 {
     class Program
     {
+        private const string DiffFilePath = "diff.csv";
+        public static IConfigurationRoot _config;
         private static readonly PiCameraService _piCamService = new PiCameraService();
 
         static async Task Main(string[] args)
         {
+            _config = new ConfigurationBuilder()
+                .AddJsonFile("appsettings.json", optional: false)
+                .Build();
+
             try
             {
                 await CapturePicturesProcessDiffAsync(tolerance: 0).ConfigureAwait(false);
@@ -70,14 +77,19 @@ namespace VisualFactoryAnomalyDetection
                 var diffNumber = await imageDiff.GetDiffNumberFromImageAsync(diff).ConfigureAwait(false);
 
                 Console.WriteLine($"Diff between previous and current pic: {diffNumber:N0} ({picture.Timestamp:o})");
-                sb.Append($"{picture.Timestamp},{diffNumber}");
+                sb.Append($"{picture.Timestamp:o},{diffNumber}");
 
                 previous = current;
                 previous.Position = 0; // Seek to beginning of stream.
             }
 
             // Write file for anomaly detection.
-            await File.WriteAllTextAsync("diff.csv", sb.ToString()).ConfigureAwait(false);
+            await File.WriteAllTextAsync(DiffFilePath, sb.ToString()).ConfigureAwait(false);
+
+            await AnomalyDetection.DetectAnomalyAsync(
+                _config["AnomalyDetector:Key"],
+                _config["AnomalyDetector:Endpoint"],
+                DiffFilePath).ConfigureAwait(false);
         }
 
         private static async Task CaptureBmpAndJpgPictureAsync()
