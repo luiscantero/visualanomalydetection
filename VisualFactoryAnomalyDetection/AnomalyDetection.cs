@@ -22,27 +22,25 @@ namespace VisualFactoryAnomalyDetection
 
             // Batch anomaly detection
             await EntireDetectSampleAsync(client, request).ConfigureAwait(false);
-
-            // Analyze the latest data point in the set.
-            await LastDetectSampleAsync(client, request).ConfigureAwait(false);
-
-            var cpdRequest = new ChangePointDetectRequest
-            {
-                Series = request.Series,
-                Granularity = request.Granularity,
-            };
-
-            // Change point detection.
-            await DetectChangePoint(client, cpdRequest).ConfigureAwait(false);
         }
 
         private static Request GetSeriesFromFile(string path)
         {
-            List<Point> list = File.ReadAllLines(path, Encoding.UTF8)
+            List<Point> list = File.ReadLines(path, Encoding.UTF8)
+                // Ignore empty lines.
                 .Where(e => e.Trim().Length != 0)
+                // Split at the comma.
                 .Select(e => e.Split(','))
+                // Take only lines with two columns.
                 .Where(e => e.Length == 2)
-                .Select(e => new Point(DateTime.Parse(e[0]), double.Parse(e[1]))).ToList();
+                // Parse Timestamp and Value.
+                .Select(e => new Point(DateTime.Parse(e[0]), double.Parse(e[1])))
+                // Group by the Timestamp's second component to match the Granularity.Secondly.
+                .GroupBy(p => new { p.Timestamp.Date, p.Timestamp.Hour, p.Timestamp.Minute, p.Timestamp.Second })
+                // Select the Timestamp with the max. millisecond component within a specific second as the key,
+                // and the max. value within that second as the Value.
+                .Select(g => new Point(g.Single(p => p.Timestamp.Millisecond == g.Max(p => p.Timestamp.Millisecond)).Timestamp, g.Max(p => p.Value)))
+                .ToList();
 
             return new Request(list, Granularity.Secondly);
         }
@@ -73,54 +71,6 @@ namespace VisualFactoryAnomalyDetection
             else
             {
                 Console.WriteLine("No anomalies detected in the series.");
-            }
-        }
-
-        /// <summary>
-        /// Check the response's IsAnomaly attribute to determine if the latest data point sent was an anomaly or not.
-        /// </summary>
-        private static async Task LastDetectSampleAsync(IAnomalyDetectorClient client, Request request)
-        {
-            Console.WriteLine("Detecting the anomaly status of the latest point in the series ...");
-
-            LastDetectResponse result = await client.LastDetectAsync(request).ConfigureAwait(false);
-
-            if (result.IsAnomaly)
-            {
-                Console.WriteLine("The latest point was detected as an anomaly.");
-            }
-            else
-            {
-                Console.WriteLine("The latest point was not detected as an anomaly.");
-            }
-        }
-
-        /// <summary>
-        /// Check the response's IsChangePoint values and print any that are true.
-        /// These values correspond to trend change points, if any were found.
-        /// </summary>
-        private static async Task DetectChangePoint(IAnomalyDetectorClient client, ChangePointDetectRequest request)
-        {
-            Console.WriteLine("Detecting the change points in the series ...");
-
-            ChangePointDetectResponse result = await client.ChangePointDetectAsync(request).ConfigureAwait(false);
-
-            if (result.IsChangePoint.Contains(true))
-            {
-                Console.WriteLine("A change point was detected at index:");
-                for (int i = 0; i < request.Series.Count; ++i)
-                {
-                    if (result.IsChangePoint[i])
-                    {
-                        Console.Write(i);
-                        Console.Write(" ");
-                    }
-                }
-                Console.WriteLine();
-            }
-            else
-            {
-                Console.WriteLine("No change point detected in the series.");
             }
         }
     }
