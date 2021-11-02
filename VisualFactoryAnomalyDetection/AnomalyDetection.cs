@@ -29,17 +29,19 @@ namespace VisualFactoryAnomalyDetection
             List<Point> list = File.ReadLines(path, Encoding.UTF8)
                 // Ignore empty lines.
                 .Where(e => e.Trim().Length != 0)
-                // Split at the comma.
+                // Split line at the comma.
                 .Select(e => e.Split(','))
                 // Take only lines with two columns.
                 .Where(e => e.Length == 2)
                 // Parse Timestamp and Value.
                 .Select(e => new Point(DateTime.Parse(e[0]), double.Parse(e[1])))
-                // Group by the Timestamp's second component to match the Granularity.Secondly.
-                .GroupBy(p => new { p.Timestamp.Date, p.Timestamp.Hour, p.Timestamp.Minute, p.Timestamp.Second })
-                // Select the Timestamp with the max. millisecond component within a specific second as the key,
-                // and the max. value within that second as the Value.
-                .Select(g => new Point(g.Single(p => p.Timestamp.Millisecond == g.Max(p => p.Timestamp.Millisecond)).Timestamp, g.Max(p => p.Value)))
+                // Group by the Timestamp's second component to achieve Granularity.Secondly.
+                .GroupBy(p => new { p.Timestamp.Kind, p.Timestamp.Date, p.Timestamp.Hour, p.Timestamp.Minute, p.Timestamp.Second })
+                // Create a Timestamp with truncated millisecond component to avoid BadRequest from the anomaly detector.
+                // Use the max. Value within a particular second as value.
+                .Select(g => new Point(
+                    new DateTime(g.Key.Date.Year, g.Key.Date.Month, g.Key.Date.Day, g.Key.Hour, g.Key.Minute, g.Key.Second, g.Key.Kind),
+                    g.Max(p => p.Value)))
                 .ToList();
 
             return new Request(list, Granularity.Secondly);
@@ -58,6 +60,7 @@ namespace VisualFactoryAnomalyDetection
             if (result.IsAnomaly.Contains(true))
             {
                 Console.WriteLine("An anomaly was detected at index:");
+
                 for (int i = 0; i < request.Series.Count; ++i)
                 {
                     if (result.IsAnomaly[i])
@@ -66,6 +69,7 @@ namespace VisualFactoryAnomalyDetection
                         Console.Write(" ");
                     }
                 }
+
                 Console.WriteLine();
             }
             else
